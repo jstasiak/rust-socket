@@ -1,0 +1,18 @@
+[package]
+
+name = "socket"
+version = "0.0.1"
+authors = ["Jakub Stasiak <jakub@stasiak.at>"]
+license = "MIT"
+description = "Low-level networking interface for Rust"
+
+
+[lib]
+
+name = "socket"
+path = "src/lib.rs"
+
+
+[dependencies]
+
+libc = "*"
