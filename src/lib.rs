@@ -124,6 +124,16 @@ impl Socket {
         _try!(bind, self.fd, &sa, mem::size_of::<sockaddr>() as i32);
         Ok(())
     }
+
+    pub fn getsockname(&self) -> Result<SocketAddr> {
+        let mut sa: sockaddr = unsafe { mem::zeroed() };
+        let mut len: socklen_t = mem::size_of::<sockaddr>() as socklen_t;
+        _try!(getsockname, self.fd,
+              unsafe { &mut sa as *mut sockaddr }, unsafe { &mut len as *mut socklen_t });
+        assert_eq!(len, mem::size_of::<sockaddr>() as socklen_t);
+
+        Ok(sockaddr_to_socketaddr(&sa))
+    }
 }
 
 fn socketaddr_to_sockaddr(addr: &SocketAddr) -> sockaddr {
@@ -147,6 +157,30 @@ fn socketaddr_to_sockaddr(addr: &SocketAddr) -> sockaddr {
     }
 }
 
+fn sockaddr_to_socketaddr(sa: &sockaddr) -> SocketAddr {
+    match sa.sa_family as i32 {
+        AF_INET => {
+            let sin: &sockaddr_in = unsafe { mem::transmute(sa) };
+            let ip_parts: [u8; 4] = unsafe { mem::transmute(sin.sin_addr) };
+            SocketAddr::new(
+                IpAddr::new_v4(
+                    ip_parts[0],
+                    ip_parts[1],
+                    ip_parts[2],
+                    ip_parts[3],
+                ),
+                ntohs(sin.sin_port),
+            )
+        },
+        AF_INET6 => {
+            panic!("IPv6 not supported yet")
+        },
+        _ => {
+            panic!("Should not happen")
+        }
+    }
+}
+
 
 /*
 #[test]
@@ -160,4 +194,11 @@ fn some_basic_socket_stuff_works() {
     let socket = Socket::new(AF_INET, SOCK_DGRAM, 0).unwrap();
     socket.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1).unwrap();
     socket.bind("0.0.0.0:0").unwrap();
+}
+
+#[test]
+fn getsockname_works() {
+    let s = Socket::new(AF_INET, SOCK_DGRAM, 0).unwrap();
+    s.bind("127.0.0.1:0").unwrap();
+    assert_eq!(s.getsockname().unwrap().ip(), IpAddr::new_v4(127, 0, 0, 1));
 }
