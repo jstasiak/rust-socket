@@ -199,6 +199,10 @@ fn some_basic_socket_stuff_works() {
 #[test]
 fn getsockname_works() {
     let s = Socket::new(AF_INET, SOCK_DGRAM, 0).unwrap();
+<<<<<<< HEAD
     s.bind("127.0.0.1:0").unwrap();
+=======
+    s.bind("127.0.0.1:0");
+>>>>>>> Implement IPv4 getsockname
     assert_eq!(s.getsockname().unwrap().ip(), IpAddr::new_v4(127, 0, 0, 1));
 }
