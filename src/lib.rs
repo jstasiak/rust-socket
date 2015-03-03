@@ -109,14 +109,14 @@ fn socketaddr_to_sockaddr(addr: &SocketAddr) -> sockaddr {
             IpAddr::V4(v4) => {
                 let mut sa: sockaddr_in = mem::zeroed();
                 sa.sin_family = AF_INET as u8;
-                sa.sin_port = addr.port();
+                sa.sin_port = htons(addr.port());
                 sa.sin_addr = *(&v4.octets() as *const u8 as *const in_addr);
                 *(&sa as *const sockaddr_in as *const sockaddr)
             },
             IpAddr::V6(_) => {
                 let mut sa: sockaddr_in6 = mem::zeroed();
                 sa.sin6_family = AF_INET6 as u8;
-                sa.sin6_port= addr.port();
+                sa.sin6_port= htons(addr.port());
                 panic!("Not supported");
                 *(&sa as *const sockaddr_in6 as *const sockaddr)
             },
