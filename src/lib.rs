@@ -22,6 +22,7 @@ use std::io::{Error, ErrorKind, Result,};
 use std::os::{errno, error_string,};
 use std::mem;
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs,};
+use std::num::Int;
 use std::vec::{Vec,};
 
 use libc::{
@@ -41,6 +42,19 @@ macro_rules! _try {
         value
     }};
 }
+
+
+/// Convert a value from host byte order to network byte order
+pub fn htons(hostshort: u16) -> u16 {
+    hostshort.to_be()
+}
+
+
+/// Convert a value from network byte order to host byte order
+pub fn ntohs(netshort: u16) -> u16 {
+    Int::from_be(netshort)
+}
+
 
 #[derive(Debug)]
 pub struct Socket {
