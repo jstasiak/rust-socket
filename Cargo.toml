@@ -5,6 +5,8 @@ version = "0.0.1"
 authors = ["Jakub Stasiak <jakub@stasiak.at>"]
 license = "MIT"
 description = "Low-level networking interface for Rust"
+repository = "https://github.com/jstasiak/rust-socket"
+readme = "README.md"
 
 
 [lib]
