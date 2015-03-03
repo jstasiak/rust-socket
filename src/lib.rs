@@ -26,7 +26,7 @@ use std::num::Int;
 use std::vec::{Vec,};
 
 use libc::{
-    c_void, in_addr, sockaddr, sockaddr_in, sockaddr_in6, socklen_t,
+    c_void, size_t, in_addr, sockaddr, sockaddr_in, sockaddr_in6, socklen_t,
 
     socket, setsockopt, bind, send, recv, recvfrom,
     listen, sendto, accept, connect, getpeername, getsockname,
@@ -134,6 +134,33 @@ impl Socket {
 
         Ok(sockaddr_to_socketaddr(&sa))
     }
+
+    pub fn sendto<T: ToSocketAddrs + ?Sized>(&self, buffer: &[u8], flags: i32, address: &T)
+            -> Result<usize> {
+        let sa = try!(tosocketaddrs_to_sockaddr(address));
+        let sent = _try!(
+            sendto, self.fd, buffer.as_ptr() as *const c_void,
+            buffer.len() as size_t, flags, &sa as *const sockaddr,
+            mem::size_of::<sockaddr>() as i32);
+        Ok(sent as usize)
+    }
+
+    pub fn recvfrom(&self, bytes: usize, flags: i32) -> Result<(SocketAddr, Box<[u8]>)> {
+        let mut a = Vec::with_capacity(bytes);
+
+        // This is needed to get some actual elements in the vector, not just a capacity
+        a.resize(bytes, 0u8);
+
+        let mut sa: sockaddr = unsafe { mem::zeroed() };
+        let mut sa_len: socklen_t = mem::size_of::<sockaddr>() as socklen_t;
+
+        let received = _try!(
+            recvfrom, self.fd, a.as_mut_slice().as_ptr() as *mut c_void, bytes as size_t, flags,
+            &mut sa as *mut sockaddr, &mut sa_len as *mut socklen_t);
+        assert_eq!(sa_len, mem::size_of::<sockaddr>() as socklen_t);
+        a.truncate(received as usize);
+        Ok((sockaddr_to_socketaddr(&sa), a.into_boxed_slice()))
+    }
 }
 
 fn socketaddr_to_sockaddr(addr: &SocketAddr) -> sockaddr {
@@ -199,10 +226,20 @@ fn some_basic_socket_stuff_works() {
 #[test]
 fn getsockname_works() {
     let s = Socket::new(AF_INET, SOCK_DGRAM, 0).unwrap();
-<<<<<<< HEAD
     s.bind("127.0.0.1:0").unwrap();
-=======
-    s.bind("127.0.0.1:0");
->>>>>>> Implement IPv4 getsockname
     assert_eq!(s.getsockname().unwrap().ip(), IpAddr::new_v4(127, 0, 0, 1));
+}
+
+#[test]
+fn udp_communication_works() {
+    let receiver = Socket::new(AF_INET, SOCK_DGRAM, 0).unwrap();
+    receiver.bind("0.0.0.0:0");
+    let address = receiver.getsockname().unwrap();
+
+    let sender = Socket::new(AF_INET, SOCK_DGRAM, 0).unwrap();
+
+    assert_eq!(sender.sendto("abcd".as_bytes(), 0, &address).unwrap(), 4);
+    let (_, received) = receiver.recvfrom(10, 0).unwrap();
+    assert_eq!(received.len(), 4);
+    // TODO: test the actual content
 }
