@@ -77,6 +77,28 @@ pub struct Socket {
     fd: i32,
 }
 
+fn tosocketaddrs_to_socketaddr<T: ToSocketAddrs + ?Sized>(address: &T) -> Result<SocketAddr> {
+    let addresses: Vec<SocketAddr> = FromIterator::from_iter(try!(address.to_socket_addrs()));
+
+    match addresses.len() {
+        1 => {
+            Ok(addresses[0])
+        },
+        // TODO is this really possible?
+        n => Err(Error::new(
+            ErrorKind::InvalidInput,
+            "Incorrect number of IP addresses passed",
+            Some(format!("1 address expected, got {}", n)),
+        ))
+    }
+}
+
+
+fn tosocketaddrs_to_sockaddr<T: ToSocketAddrs + ?Sized>(address: &T) -> Result<sockaddr> {
+    Ok(socketaddr_to_sockaddr(&try!(tosocketaddrs_to_socketaddr(address))))
+}
+
+
 impl Socket {
     pub fn new(socket_family: i32, socket_type: i32, protocol: i32) -> Result<Socket> {
         let fd = _try!(socket, socket_family, socket_type, protocol);
@@ -98,24 +120,9 @@ impl Socket {
     }
 
     pub fn bind<T: ToSocketAddrs + ?Sized>(&self, address: &T) -> Result<()> {
-        let addresses: Vec<SocketAddr> =
-            FromIterator::from_iter(try!(address.to_socket_addrs()));
-
-        match addresses.len() {
-            1 => {
-                let a = addresses[0];
-                let sa = socketaddr_to_sockaddr(&a);
-                _try!(bind, self.fd, &sa, mem::size_of::<sockaddr>() as i32);
-                Ok(())
-            },
-            // TODO is this really possible? If yes - should be refactored out
-            // of here
-            n => Err(Error::new(
-                ErrorKind::InvalidInput,
-                "Incorrect number of IP addresses passed",
-                Some(format!("1 address expected, got {}", n)),
-            ))
-        }
+        let sa = try!(tosocketaddrs_to_sockaddr(address));
+        _try!(bind, self.fd, &sa, mem::size_of::<sockaddr>() as i32);
+        Ok(())
     }
 }
 
