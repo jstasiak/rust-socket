@@ -45,24 +45,28 @@ macro_rules! _try {
 
 
 /// Convert a value from host byte order to network byte order
+#[inline]
 pub fn htons(hostshort: u16) -> u16 {
     hostshort.to_be()
 }
 
 
 /// Convert a value from network byte order to host byte order
+#[inline]
 pub fn ntohs(netshort: u16) -> u16 {
     Int::from_be(netshort)
 }
 
 
 /// Convert a value from host byte order to network byte order
+#[inline]
 pub fn htonl(hostlong: u32) -> u32 {
     hostlong.to_be()
 }
 
 
 /// Convert a value from network byte order to host byte order
+#[inline]
 pub fn ntohl(netlong: u32) -> u32 {
     Int::from_be(netlong)
 }
