@@ -56,6 +56,18 @@ pub fn ntohs(netshort: u16) -> u16 {
 }
 
 
+/// Convert a value from host byte order to network byte order
+pub fn htonl(hostlong: u32) -> u32 {
+    hostlong.to_be()
+}
+
+
+/// Convert a value from network byte order to host byte order
+pub fn ntohl(netlong: u32) -> u32 {
+    Int::from_be(netlong)
+}
+
+
 #[derive(Debug)]
 pub struct Socket {
     fd: i32,
