@@ -23,10 +23,11 @@ use std::os::{errno, error_string,};
 use std::mem;
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs,};
 use std::num::Int;
+use std::thread;
 use std::vec::{Vec,};
 
 use libc::{
-    c_void, size_t, in_addr, sockaddr, sockaddr_in, sockaddr_in6, socklen_t,
+    c_int, c_void, size_t, in_addr, sockaddr, sockaddr_in, sockaddr_in6, socklen_t,
 
     socket, setsockopt, bind, send, recv, recvfrom,
     listen, sendto, accept, connect, getpeername, getsockname,
@@ -161,6 +162,27 @@ impl Socket {
         a.truncate(received as usize);
         Ok((sockaddr_to_socketaddr(&sa), a.into_boxed_slice()))
     }
+
+    pub fn connect<T: ToSocketAddrs + ?Sized>(&self, toaddress: &T) -> Result<()> {
+        let address = try!(tosocketaddrs_to_sockaddr(toaddress));
+        _try!(connect, self.fd, &address as *const sockaddr, mem::size_of::<sockaddr>() as c_int);
+        Ok(())
+    }
+
+    pub fn listen(&self, backlog: i32) -> Result<()> {
+        _try!(listen, self.fd, backlog);
+        Ok(())
+    }
+
+    pub fn accept(&self) -> Result<(Socket, SocketAddr)> {
+        let mut sa: sockaddr = unsafe { mem::zeroed() };
+        let mut sa_len: socklen_t = mem::size_of::<sockaddr>() as socklen_t;
+
+        let fd = _try!(
+            accept, self.fd, &mut sa as *mut sockaddr, &mut sa_len as *mut socklen_t);
+        assert_eq!(sa_len, mem::size_of::<sockaddr>() as socklen_t);
+        Ok((Socket { fd: fd }, sockaddr_to_socketaddr(&sa)))
+    }
 }
 
 fn socketaddr_to_sockaddr(addr: &SocketAddr) -> sockaddr {
@@ -242,4 +264,20 @@ fn udp_communication_works() {
     let (_, received) = receiver.recvfrom(10, 0).unwrap();
     assert_eq!(received.len(), 4);
     // TODO: test the actual content
+}
+
+#[test]
+fn tcp_communication_works() {
+    let listener = Socket::new(AF_INET, SOCK_STREAM, 0).unwrap();
+    listener.bind("0.0.0.0:0").unwrap();
+    listener.listen(10).unwrap();
+
+    let address = listener.getsockname().unwrap();
+
+    let thread = thread::scoped(|| {
+        listener.accept().unwrap();
+    });
+
+    let client = Socket::new(AF_INET, SOCK_STREAM, 0).unwrap();
+    client.connect(&address).unwrap();
 }
