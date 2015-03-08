@@ -30,6 +30,7 @@ use libc::{
     c_int, c_void, size_t, in_addr, sockaddr, sockaddr_in, sockaddr_in6, socklen_t,
 
     socket, setsockopt, bind, send, recv, recvfrom,
+    close,
     listen, sendto, accept, connect, getpeername, getsockname,
     shutdown,
 };
@@ -201,6 +202,11 @@ impl Socket {
             accept, self.fd, &mut sa as *mut sockaddr, &mut sa_len as *mut socklen_t);
         assert_eq!(sa_len, mem::size_of::<sockaddr>() as socklen_t);
         Ok((Socket { fd: fd }, sockaddr_to_socketaddr(&sa)))
+    }
+
+    pub fn close(&self) -> Result<()> {
+        _try!(close, self.fd);
+        Ok(())
     }
 }
 
