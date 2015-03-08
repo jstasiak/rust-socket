@@ -23,6 +23,7 @@ use std::os::{errno, error_string,};
 use std::mem;
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs,};
 use std::num::Int;
+use std::ops::Drop;
 use std::thread;
 use std::vec::{Vec,};
 
@@ -209,6 +210,14 @@ impl Socket {
         Ok(())
     }
 }
+
+
+impl Drop for Socket {
+    fn drop(&mut self) {
+        let _ = self.close();
+    }
+}
+
 
 fn socketaddr_to_sockaddr(addr: &SocketAddr) -> sockaddr {
     unsafe {
