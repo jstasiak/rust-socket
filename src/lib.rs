@@ -146,6 +146,13 @@ impl Socket {
         Ok(sent as usize)
     }
 
+    pub fn send(&self, buffer: &[u8], flags: i32)
+            -> Result<usize> {
+        let sent = _try!(
+            send, self.fd, buffer.as_ptr() as *const c_void, buffer.len() as size_t, flags);
+        Ok(sent as usize)
+    }
+
     pub fn recvfrom(&self, bytes: usize, flags: i32) -> Result<(SocketAddr, Box<[u8]>)> {
         let mut a = Vec::with_capacity(bytes);
 
@@ -161,6 +168,18 @@ impl Socket {
         assert_eq!(sa_len, mem::size_of::<sockaddr>() as socklen_t);
         a.truncate(received as usize);
         Ok((sockaddr_to_socketaddr(&sa), a.into_boxed_slice()))
+    }
+
+    pub fn recv(&self, bytes: usize, flags: i32) -> Result<Box<[u8]>> {
+        let mut a = Vec::with_capacity(bytes);
+
+        // This is needed to get some actual elements in the vector, not just a capacity
+        a.resize(bytes, 0u8);
+
+        let received = _try!(
+            recv, self.fd, a.as_mut_slice().as_ptr() as *mut c_void, bytes as size_t, flags);
+        a.truncate(received as usize);
+        Ok(a.into_boxed_slice())
     }
 
     pub fn connect<T: ToSocketAddrs + ?Sized>(&self, toaddress: &T) -> Result<()> {
@@ -275,9 +294,14 @@ fn tcp_communication_works() {
     let address = listener.getsockname().unwrap();
 
     let thread = thread::scoped(|| {
-        listener.accept().unwrap();
+        let (server, _) = listener.accept().unwrap();
+        let data = server.recv(10, 0).unwrap();
+        assert_eq!(data.len(), 4);
+        // TODO: test the received content
     });
 
     let client = Socket::new(AF_INET, SOCK_STREAM, 0).unwrap();
     client.connect(&address).unwrap();
+    let sent = client.send("abcd".as_bytes(), 0).unwrap();
+    assert_eq!(sent, 4);
 }
