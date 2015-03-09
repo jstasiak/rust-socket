@@ -209,6 +209,11 @@ impl Socket {
         _try!(close, self.fd);
         Ok(())
     }
+
+    pub fn shutdown(&self, how: i32) -> Result<()> {
+        _try!(shutdown, self.fd, how);
+        Ok(())
+    }
 }
 
 
