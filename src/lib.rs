@@ -1,6 +1,5 @@
-#![feature(core)]
+#![feature(collections)]
 #![feature(io)]
-#![feature(net)]
 
 extern crate libc;
 
@@ -16,24 +15,20 @@ pub use libc::{
 };
 
 
-use std::result::Result as GenericResult;
 use std::iter::{FromIterator,};
 use std::io::{Error, ErrorKind, Result,};
-use std::os::{errno, error_string,};
 use std::mem;
-use std::net::{IpAddr, SocketAddr, ToSocketAddrs,};
+use std::net::{Ipv4Addr, SocketAddr, ToSocketAddrs, SocketAddrV4};
 use std::num::Int;
 use std::ops::Drop;
-use std::thread;
 use std::vec::{Vec,};
 
 use libc::{
-    c_int, c_void, size_t, in_addr, sockaddr, sockaddr_in, sockaddr_in6, socklen_t,
+    c_uint, c_void, size_t, in_addr, sockaddr, sockaddr_in, socklen_t,
 
     socket, setsockopt, bind, send, recv, recvfrom,
     close,
-    listen, sendto, accept, connect, getpeername, getsockname,
-    shutdown,
+    listen, sendto, accept, connect, getsockname,
 };
 
 macro_rules! _try {
@@ -124,7 +119,7 @@ impl Socket {
 
     pub fn bind<T: ToSocketAddrs + ?Sized>(&self, address: &T) -> Result<()> {
         let sa = try!(tosocketaddrs_to_sockaddr(address));
-        _try!(bind, self.fd, &sa, mem::size_of::<sockaddr>() as i32);
+        _try!(bind, self.fd, &sa, mem::size_of::<sockaddr>() as u32);
         Ok(())
     }
 
@@ -132,7 +127,7 @@ impl Socket {
         let mut sa: sockaddr = unsafe { mem::zeroed() };
         let mut len: socklen_t = mem::size_of::<sockaddr>() as socklen_t;
         _try!(getsockname, self.fd,
-              unsafe { &mut sa as *mut sockaddr }, unsafe { &mut len as *mut socklen_t });
+              &mut sa as *mut sockaddr, &mut len as *mut socklen_t);
         assert_eq!(len, mem::size_of::<sockaddr>() as socklen_t);
 
         Ok(sockaddr_to_socketaddr(&sa))
@@ -144,7 +139,7 @@ impl Socket {
         let sent = _try!(
             sendto, self.fd, buffer.as_ptr() as *const c_void,
             buffer.len() as size_t, flags, &sa as *const sockaddr,
-            mem::size_of::<sockaddr>() as i32);
+            mem::size_of::<sockaddr>() as u32);
         Ok(sent as usize)
     }
 
@@ -186,7 +181,7 @@ impl Socket {
 
     pub fn connect<T: ToSocketAddrs + ?Sized>(&self, toaddress: &T) -> Result<()> {
         let address = try!(tosocketaddrs_to_sockaddr(toaddress));
-        _try!(connect, self.fd, &address as *const sockaddr, mem::size_of::<sockaddr>() as c_int);
+        _try!(connect, self.fd, &address as *const sockaddr, mem::size_of::<sockaddr>() as c_uint);
         Ok(())
     }
 
@@ -226,20 +221,22 @@ impl Drop for Socket {
 
 fn socketaddr_to_sockaddr(addr: &SocketAddr) -> sockaddr {
     unsafe {
-        match addr.ip() {
-            IpAddr::V4(v4) => {
+        match *addr {
+            SocketAddr::V4(v4) => {
                 let mut sa: sockaddr_in = mem::zeroed();
-                sa.sin_family = AF_INET as u8;
-                sa.sin_port = htons(addr.port());
-                sa.sin_addr = *(&v4.octets() as *const u8 as *const in_addr);
+                sa.sin_family = AF_INET as u16;
+                sa.sin_port = htons(v4.port());
+                sa.sin_addr = *(&v4.ip().octets() as *const u8 as *const in_addr);
                 *(&sa as *const sockaddr_in as *const sockaddr)
             },
-            IpAddr::V6(_) => {
-                let mut sa: sockaddr_in6 = mem::zeroed();
-                sa.sin6_family = AF_INET6 as u8;
-                sa.sin6_port= htons(addr.port());
+            SocketAddr::V6(_) => {
                 panic!("Not supported");
-                *(&sa as *const sockaddr_in6 as *const sockaddr)
+                /*
+                let mut sa: sockaddr_in6 = mem::zeroed();
+                sa.sin6_family = AF_INET6 as u16;
+                sa.sin6_port = htons(v6.port());
+                (&sa as *const sockaddr_in6 as *const sockaddr)
+                */
             },
         }
     }
@@ -250,78 +247,88 @@ fn sockaddr_to_socketaddr(sa: &sockaddr) -> SocketAddr {
         AF_INET => {
             let sin: &sockaddr_in = unsafe { mem::transmute(sa) };
             let ip_parts: [u8; 4] = unsafe { mem::transmute(sin.sin_addr) };
-            SocketAddr::new(
-                IpAddr::new_v4(
+            SocketAddr::V4(
+                SocketAddrV4::new(Ipv4Addr::new(
                     ip_parts[0],
                     ip_parts[1],
                     ip_parts[2],
                     ip_parts[3],
                 ),
-                ntohs(sin.sin_port),
+                ntohs(sin.sin_port))
             )
         },
         AF_INET6 => {
             panic!("IPv6 not supported yet")
         },
         _ => {
-            panic!("Should not happen")
+            unreachable!("Should not happen")
         }
     }
 }
 
 
-/*
-#[test]
-fn inet_aton_works() {
-    assert_eq!(inet_aton("1.2.3.4"), Ok([1u8, 2u8, 3u8, 4u8]));
-}
-*/
+#[cfg(test)]
+mod tests {
+    use std::thread;
+    use super::{Socket, AF_INET, SOCK_STREAM, SOCK_DGRAM, SOL_SOCKET, SO_REUSEADDR};
+    use std::net::SocketAddr;
+    /*
+    #[test]
+    fn inet_aton_works() {
+        assert_eq!(inet_aton("1.2.3.4"), Ok([1u8, 2u8, 3u8, 4u8]));
+    }
+    */
 
-#[test]
-fn some_basic_socket_stuff_works() {
-    let socket = Socket::new(AF_INET, SOCK_DGRAM, 0).unwrap();
-    socket.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1).unwrap();
-    socket.bind("0.0.0.0:0").unwrap();
-}
+    #[test]
+    fn some_basic_socket_stuff_works() {
+        let socket = Socket::new(AF_INET, SOCK_DGRAM, 0).unwrap();
+        socket.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1).unwrap();
+        socket.bind("0.0.0.0:0").unwrap();
+    }
 
-#[test]
-fn getsockname_works() {
-    let s = Socket::new(AF_INET, SOCK_DGRAM, 0).unwrap();
-    s.bind("127.0.0.1:0").unwrap();
-    assert_eq!(s.getsockname().unwrap().ip(), IpAddr::new_v4(127, 0, 0, 1));
-}
+    #[test]
+    fn getsockname_works() {
+        let s = Socket::new(AF_INET, SOCK_DGRAM, 0).unwrap();
+        s.bind("127.0.0.1:0").unwrap();
+        if let SocketAddr::V4(v4) = s.getsockname().unwrap() {
+            assert_eq!(v4.ip().octets(), [127, 0, 0, 1]);
+        } else {
+            panic!("getsockname() failed!");
+        }
+    }
 
-#[test]
-fn udp_communication_works() {
-    let receiver = Socket::new(AF_INET, SOCK_DGRAM, 0).unwrap();
-    receiver.bind("0.0.0.0:0");
-    let address = receiver.getsockname().unwrap();
+    #[test]
+    fn udp_communication_works() {
+        let receiver = Socket::new(AF_INET, SOCK_DGRAM, 0).unwrap();
+        receiver.bind("0.0.0.0:0").unwrap();
+        let address = receiver.getsockname().unwrap();
 
-    let sender = Socket::new(AF_INET, SOCK_DGRAM, 0).unwrap();
+        let sender = Socket::new(AF_INET, SOCK_DGRAM, 0).unwrap();
 
-    assert_eq!(sender.sendto("abcd".as_bytes(), 0, &address).unwrap(), 4);
-    let (_, received) = receiver.recvfrom(10, 0).unwrap();
-    assert_eq!(received.len(), 4);
-    // TODO: test the actual content
-}
+        assert_eq!(sender.sendto("abcd".as_bytes(), 0, &address).unwrap(), 4);
+        let (_, received) = receiver.recvfrom(10, 0).unwrap();
+        assert_eq!(received.len(), 4);
+        // TODO: test the actual content
+    }
 
-#[test]
-fn tcp_communication_works() {
-    let listener = Socket::new(AF_INET, SOCK_STREAM, 0).unwrap();
-    listener.bind("0.0.0.0:0").unwrap();
-    listener.listen(10).unwrap();
+    #[test]
+    fn tcp_communication_works() {
+        let listener = Socket::new(AF_INET, SOCK_STREAM, 0).unwrap();
+        listener.bind("0.0.0.0:0").unwrap();
+        listener.listen(10).unwrap();
 
-    let address = listener.getsockname().unwrap();
+        let address = listener.getsockname().unwrap();
 
-    let thread = thread::scoped(|| {
-        let (server, _) = listener.accept().unwrap();
-        let data = server.recv(10, 0).unwrap();
-        assert_eq!(data.len(), 4);
-        // TODO: test the received content
-    });
+        let _ = thread::spawn(move || {
+            let (server, _) = listener.accept().unwrap();
+            let data = server.recv(10, 0).unwrap();
+            assert_eq!(data.len(), 4);
+            // TODO: test the received content
+        });
 
-    let client = Socket::new(AF_INET, SOCK_STREAM, 0).unwrap();
-    client.connect(&address).unwrap();
-    let sent = client.send("abcd".as_bytes(), 0).unwrap();
-    assert_eq!(sent, 4);
+        let client = Socket::new(AF_INET, SOCK_STREAM, 0).unwrap();
+        client.connect(&address).unwrap();
+        let sent = client.send("abcd".as_bytes(), 0).unwrap();
+        assert_eq!(sent, 4);
+    }
 }
