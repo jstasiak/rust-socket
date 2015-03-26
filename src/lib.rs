@@ -29,6 +29,7 @@ use libc::{
     socket, setsockopt, bind, send, recv, recvfrom,
     close,
     listen, sendto, accept, connect, getsockname,
+    shutdown,
 };
 
 macro_rules! _try {
