@@ -19,6 +19,7 @@ use std::iter::{FromIterator,};
 use std::io::{Error, ErrorKind, Result,};
 use std::mem;
 use std::net::{Ipv4Addr, SocketAddr, ToSocketAddrs, SocketAddrV4};
+use std::num;
 use std::num::Int;
 use std::ops::Drop;
 use std::vec::{Vec,};
@@ -120,7 +121,7 @@ impl Socket {
 
     pub fn bind<T: ToSocketAddrs + ?Sized>(&self, address: &T) -> Result<()> {
         let sa = try!(tosocketaddrs_to_sockaddr(address));
-        _try!(bind, self.fd, &sa, mem::size_of::<sockaddr>() as u32);
+        _try!(bind, self.fd, &sa, num::cast(mem::size_of::<sockaddr>()).unwrap());
         Ok(())
     }
 
@@ -140,7 +141,7 @@ impl Socket {
         let sent = _try!(
             sendto, self.fd, buffer.as_ptr() as *const c_void,
             buffer.len() as size_t, flags, &sa as *const sockaddr,
-            mem::size_of::<sockaddr>() as u32);
+            num::cast(mem::size_of::<sockaddr>()).unwrap());
         Ok(sent as usize)
     }
 
@@ -182,7 +183,7 @@ impl Socket {
 
     pub fn connect<T: ToSocketAddrs + ?Sized>(&self, toaddress: &T) -> Result<()> {
         let address = try!(tosocketaddrs_to_sockaddr(toaddress));
-        _try!(connect, self.fd, &address as *const sockaddr, mem::size_of::<sockaddr>() as c_uint);
+        _try!(connect, self.fd, &address as *const sockaddr, num::cast(mem::size_of::<sockaddr>()).unwrap());
         Ok(())
     }
 
@@ -225,7 +226,7 @@ fn socketaddr_to_sockaddr(addr: &SocketAddr) -> sockaddr {
         match *addr {
             SocketAddr::V4(v4) => {
                 let mut sa: sockaddr_in = mem::zeroed();
-                sa.sin_family = AF_INET as u16;
+                sa.sin_family = num::cast(AF_INET).unwrap();
                 sa.sin_port = htons(v4.port());
                 sa.sin_addr = *(&v4.ip().octets() as *const u8 as *const in_addr);
                 *(&sa as *const sockaddr_in as *const sockaddr)
