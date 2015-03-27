@@ -1,6 +1,7 @@
 #![feature(core)]
 #![feature(collections)]
 #![feature(io)]
+#![allow(trivial_casts)]
 
 extern crate libc;
 
