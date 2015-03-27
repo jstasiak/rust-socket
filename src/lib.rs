@@ -1,3 +1,4 @@
+#![feature(core)]
 #![feature(collections)]
 #![feature(io)]
 
@@ -25,7 +26,7 @@ use std::ops::Drop;
 use std::vec::{Vec,};
 
 use libc::{
-    c_uint, c_void, size_t, in_addr, sockaddr, sockaddr_in, socklen_t,
+    c_void, size_t, in_addr, sockaddr, sockaddr_in, socklen_t,
 
     socket, setsockopt, bind, send, recv, recvfrom,
     close,
