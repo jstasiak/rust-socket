@@ -160,15 +160,20 @@ impl Socket {
         // This is needed to get some actual elements in the vector, not just a capacity
         a.resize(bytes, 0u8);
 
+        let (socket_addr, received) = try!(self.recvfrom_into(a.as_mut_slice(), flags));
+
+        a.truncate(received);
+        Ok((socket_addr, a.into_boxed_slice()))
+    }
+
+    pub fn recvfrom_into(&self, buffer: &mut [u8], flags: i32) -> Result<(SocketAddr, usize)> {
         let mut sa: sockaddr = unsafe { mem::zeroed() };
         let mut sa_len: socklen_t = mem::size_of::<sockaddr>() as socklen_t;
-
         let received = _try!(
-            recvfrom, self.fd, a.as_mut_slice().as_ptr() as *mut c_void, bytes as size_t, flags,
+            recvfrom, self.fd, buffer.as_ptr() as *mut c_void, buffer.len() as size_t, flags,
             &mut sa as *mut sockaddr, &mut sa_len as *mut socklen_t);
         assert_eq!(sa_len, mem::size_of::<sockaddr>() as socklen_t);
-        a.truncate(received as usize);
-        Ok((sockaddr_to_socketaddr(&sa), a.into_boxed_slice()))
+        Ok((sockaddr_to_socketaddr(&sa), received as usize))
     }
 
     pub fn recv(&self, bytes: usize, flags: i32) -> Result<Box<[u8]>> {
@@ -177,10 +182,15 @@ impl Socket {
         // This is needed to get some actual elements in the vector, not just a capacity
         a.resize(bytes, 0u8);
 
-        let received = _try!(
-            recv, self.fd, a.as_mut_slice().as_ptr() as *mut c_void, bytes as size_t, flags);
-        a.truncate(received as usize);
+        let received = try!(self.recv_into(a.as_mut_slice(), flags));
+
+        a.truncate(received);
         Ok(a.into_boxed_slice())
+    }
+
+    pub fn recv_into(&self, buffer: &mut [u8], flags: i32) -> Result<usize> {
+        let received = _try!(recv, self.fd, buffer.as_ptr() as *mut c_void, buffer.len() as size_t, flags);
+        Ok(received as usize)
     }
 
     pub fn connect<T: ToSocketAddrs + ?Sized>(&self, toaddress: &T) -> Result<()> {
