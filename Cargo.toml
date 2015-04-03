@@ -6,6 +6,8 @@ authors = ["Jakub Stasiak <jakub@stasiak.at>"]
 license = "MIT"
 description = "Low-level networking interface for Rust"
 repository = "https://github.com/jstasiak/rust-socket"
+homepage = "https://github.com/jstasiak/rust-socket"
+documentation = "http://www.rustdox.com/github.com/jstasiak/rust-socket.git/socket/"
 readme = "README.md"
 
 
