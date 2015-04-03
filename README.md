@@ -4,6 +4,7 @@ socket
 > Low-level networking interface for Rust modeled after Python's socket module
 
 Homepage and repository: https://github.com/jstasiak/rust-socket
+
 Documentation: http://www.rustdox.com/github.com/jstasiak/rust-socket.git/socket/
 
 ## Example
