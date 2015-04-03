@@ -1,6 +1,6 @@
+#![feature(convert)]
 #![feature(core)]
 #![feature(collections)]
-#![feature(io)]
 #![allow(trivial_casts)]
 
 extern crate libc;
@@ -89,8 +89,9 @@ fn tosocketaddrs_to_socketaddr<T: ToSocketAddrs + ?Sized>(address: &T) -> Result
         // TODO is this really possible?
         n => Err(Error::new(
             ErrorKind::InvalidInput,
-            "Incorrect number of IP addresses passed",
-            Some(format!("1 address expected, got {}", n)),
+            format!(
+                "Incorrect number of IP addresses passed, \
+                1 address expected, got {}", n).as_str(),
         ))
     }
 }
