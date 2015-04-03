@@ -46,28 +46,28 @@ macro_rules! _try {
 }
 
 
-/// Convert a value from host byte order to network byte order
+/// Converts a value from host byte order to network byte order.
 #[inline]
 pub fn htons(hostshort: u16) -> u16 {
     hostshort.to_be()
 }
 
 
-/// Convert a value from network byte order to host byte order
+/// Converts a value from network byte order to host byte order.
 #[inline]
 pub fn ntohs(netshort: u16) -> u16 {
     Int::from_be(netshort)
 }
 
 
-/// Convert a value from host byte order to network byte order
+/// Converts a value from host byte order to network byte order.
 #[inline]
 pub fn htonl(hostlong: u32) -> u32 {
     hostlong.to_be()
 }
 
 
-/// Convert a value from network byte order to host byte order
+/// Converts a value from network byte order to host byte order.
 #[inline]
 pub fn ntohl(netlong: u32) -> u32 {
     Int::from_be(netlong)
@@ -108,6 +108,7 @@ impl Socket {
         Ok(Socket { fd: fd })
     }
 
+    /// Returns the underlying file descriptor.
     pub fn fileno(&self) -> i32 {
         self.fd
     }
@@ -122,6 +123,7 @@ impl Socket {
         Ok(())
     }
 
+    /// Binds socket to an address
     pub fn bind<T: ToSocketAddrs + ?Sized>(&self, address: &T) -> Result<()> {
         let sa = try!(tosocketaddrs_to_sockaddr(address));
         _try!(bind, self.fd, &sa, num::cast(mem::size_of::<sockaddr>()).unwrap());
@@ -155,6 +157,7 @@ impl Socket {
         Ok(sent as usize)
     }
 
+    /// Receives data from a remote socket and returns it with the address of the socket.
     pub fn recvfrom(&self, bytes: usize, flags: i32) -> Result<(SocketAddr, Box<[u8]>)> {
         let mut a = Vec::with_capacity(bytes);
 
@@ -167,6 +170,8 @@ impl Socket {
         Ok((socket_addr, a.into_boxed_slice()))
     }
 
+    /// Similar to `recvfrom` but receives to predefined buffer and returns the number
+    /// of bytes read.
     pub fn recvfrom_into(&self, buffer: &mut [u8], flags: i32) -> Result<(SocketAddr, usize)> {
         let mut sa: sockaddr = unsafe { mem::zeroed() };
         let mut sa_len: socklen_t = mem::size_of::<sockaddr>() as socklen_t;
@@ -177,6 +182,7 @@ impl Socket {
         Ok((sockaddr_to_socketaddr(&sa), received as usize))
     }
 
+    /// Returns up to `bytes` bytes received from the remote socket.
     pub fn recv(&self, bytes: usize, flags: i32) -> Result<Box<[u8]>> {
         let mut a = Vec::with_capacity(bytes);
 
@@ -189,6 +195,8 @@ impl Socket {
         Ok(a.into_boxed_slice())
     }
 
+    /// Similar to `recv` but receives to predefined buffer and returns the number
+    /// of bytes read.
     pub fn recv_into(&self, buffer: &mut [u8], flags: i32) -> Result<usize> {
         let received = _try!(recv, self.fd, buffer.as_ptr() as *mut c_void, buffer.len() as size_t, flags);
         Ok(received as usize)
