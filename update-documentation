@@ -1,0 +1,2 @@
+#!/usr/bin/env sh
+curl -X POST -H "Git: https://github.com/jstasiak/rust-socket.git" http://www.rustdox.com
