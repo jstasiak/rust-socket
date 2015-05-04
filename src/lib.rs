@@ -342,7 +342,7 @@ mod tests {
 
         let address = listener.getsockname().unwrap();
 
-        let _ = thread::spawn(move || {
+        let guard = thread::scoped(move || {
             let (server, _) = listener.accept().unwrap();
             let data = server.recv(10, 0).unwrap();
             assert_eq!(data.len(), 4);
