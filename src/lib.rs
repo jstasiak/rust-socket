@@ -14,6 +14,8 @@ pub use libc::{
     IPV6_ADD_MEMBERSHIP, IPV6_DROP_MEMBERSHIP,
     IP_MULTICAST_TTL, IP_TTL, IP_HDRINCL, SHUT_RD,
     IPPROTO_RAW,
+
+    AF_UNIX,
 };
 
 
@@ -28,6 +30,7 @@ use std::vec::{Vec,};
 
 use libc::{
     c_void, size_t, in_addr, sockaddr, sockaddr_in, socklen_t,
+    c_int,
 
     socket, setsockopt, bind, send, recv, recvfrom,
     close,
@@ -43,6 +46,11 @@ macro_rules! _try {
         }
         value
     }};
+}
+
+extern {
+    #[link_name="socketpair"]
+    fn c_socketpair(domain: c_int, type_: c_int, protocol: c_int, sv: *mut [c_int]) -> c_int;
 }
 
 
@@ -71,6 +79,14 @@ pub fn htonl(hostlong: u32) -> u32 {
 #[inline]
 pub fn ntohl(netlong: u32) -> u32 {
     Int::from_be(netlong)
+}
+
+pub fn socketpair(domain: i32, type_: i32, protocol: i32) -> Result<(Socket, Socket)> {
+    unsafe {
+        let mut fds: [c_int; 2] = mem::zeroed();
+        _try!(c_socketpair, domain as c_int, type_ as c_int, protocol as c_int, &mut fds as *mut [c_int]);
+        Ok((Socket { fd: fds[0] }, Socket { fd: fds[1] }))
+    }
 }
 
 
@@ -293,7 +309,7 @@ fn sockaddr_to_socketaddr(sa: &sockaddr) -> SocketAddr {
 #[cfg(test)]
 mod tests {
     use std::thread;
-    use super::{Socket, AF_INET, SOCK_STREAM, SOCK_DGRAM, SOL_SOCKET, SO_REUSEADDR};
+    use super::{Socket, AF_UNIX, AF_INET, SOCK_STREAM, SOCK_DGRAM, SOL_SOCKET, SO_REUSEADDR, socketpair};
     use std::net::SocketAddr;
     /*
     #[test]
@@ -352,6 +368,20 @@ mod tests {
         let client = Socket::new(AF_INET, SOCK_STREAM, 0).unwrap();
         client.connect(&address).unwrap();
         let sent = client.send("abcd".as_bytes(), 0).unwrap();
+        println!("c4");
+        assert_eq!(sent, 4);
+    }
+
+    #[test]
+    fn socketpair_and_unix_sockets_work() {
+        let (s1, s2) = socketpair(AF_UNIX, SOCK_STREAM, 0).unwrap();
+        let guard = thread::scoped(move || {
+            let data = s1.recv(10, 0).unwrap();
+            assert_eq!(data.len(), 4);
+            // TODO: test the received content
+        });
+
+        let sent = s2.send("abcd".as_bytes(), 0).unwrap();
         assert_eq!(sent, 4);
     }
 }
