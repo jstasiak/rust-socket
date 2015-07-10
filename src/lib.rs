@@ -1,9 +1,7 @@
-#![feature(convert)]
-#![feature(core)]
-#![feature(collections)]
 #![allow(trivial_casts)]
 
 extern crate libc;
+extern crate num;
 
 pub use libc::{
     AF_INET, AF_INET6, SOCK_STREAM, SOCK_DGRAM, SOCK_RAW,
@@ -19,12 +17,10 @@ pub use libc::{
 };
 
 
-use std::iter::{FromIterator,};
+use std::iter::{FromIterator, repeat, };
 use std::io::{Error, ErrorKind, Result,};
 use std::mem;
 use std::net::{Ipv4Addr, SocketAddr, ToSocketAddrs, SocketAddrV4};
-use std::num;
-use std::num::Int;
 use std::ops::Drop;
 use std::vec::{Vec,};
 
@@ -64,7 +60,7 @@ pub fn htons(hostshort: u16) -> u16 {
 /// Converts a value from network byte order to host byte order.
 #[inline]
 pub fn ntohs(netshort: u16) -> u16 {
-    Int::from_be(netshort)
+    u16::from_be(netshort)
 }
 
 
@@ -78,7 +74,7 @@ pub fn htonl(hostlong: u32) -> u32 {
 /// Converts a value from network byte order to host byte order.
 #[inline]
 pub fn ntohl(netlong: u32) -> u32 {
-    Int::from_be(netlong)
+    u32::from_be(netlong)
 }
 
 pub fn socketpair(domain: i32, type_: i32, protocol: i32) -> Result<(Socket, Socket)> {
@@ -105,9 +101,9 @@ fn tosocketaddrs_to_socketaddr<T: ToSocketAddrs + ?Sized>(address: &T) -> Result
         // TODO is this really possible?
         n => Err(Error::new(
             ErrorKind::InvalidInput,
-            format!(
+            &format!(
                 "Incorrect number of IP addresses passed, \
-                1 address expected, got {}", n).as_str(),
+                1 address expected, got {}", n)[..],
         ))
     }
 }
@@ -178,9 +174,9 @@ impl Socket {
         let mut a = Vec::with_capacity(bytes);
 
         // This is needed to get some actual elements in the vector, not just a capacity
-        a.resize(bytes, 0u8);
+        a.extend(repeat(0u8).take(bytes));
 
-        let (socket_addr, received) = try!(self.recvfrom_into(a.as_mut_slice(), flags));
+        let (socket_addr, received) = try!(self.recvfrom_into(&mut a[..], flags));
 
         a.truncate(received);
         Ok((socket_addr, a.into_boxed_slice()))
@@ -203,9 +199,9 @@ impl Socket {
         let mut a = Vec::with_capacity(bytes);
 
         // This is needed to get some actual elements in the vector, not just a capacity
-        a.resize(bytes, 0u8);
+        a.extend(repeat(0u8).take(bytes));
 
-        let received = try!(self.recv_into(a.as_mut_slice(), flags));
+        let received = try!(self.recv_into(&mut a[..], flags));
 
         a.truncate(received);
         Ok(a.into_boxed_slice())
@@ -358,7 +354,7 @@ mod tests {
 
         let address = listener.getsockname().unwrap();
 
-        let guard = thread::scoped(move || {
+        let thread = thread::spawn(move || {
             let (server, _) = listener.accept().unwrap();
             let data = server.recv(10, 0).unwrap();
             assert_eq!(data.len(), 4);
@@ -370,12 +366,14 @@ mod tests {
         let sent = client.send("abcd".as_bytes(), 0).unwrap();
         println!("c4");
         assert_eq!(sent, 4);
+
+        thread.join();
     }
 
     #[test]
     fn socketpair_and_unix_sockets_work() {
         let (s1, s2) = socketpair(AF_UNIX, SOCK_STREAM, 0).unwrap();
-        let guard = thread::scoped(move || {
+        let thread = thread::spawn(move || {
             let data = s1.recv(10, 0).unwrap();
             assert_eq!(data.len(), 4);
             // TODO: test the received content
@@ -383,5 +381,6 @@ mod tests {
 
         let sent = s2.send("abcd".as_bytes(), 0).unwrap();
         assert_eq!(sent, 4);
+        thread.join();
     }
 }
