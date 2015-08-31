@@ -35,8 +35,8 @@ use libc::{
 };
 
 macro_rules! _try {
-    ( $fun:ident, $( $x:expr ),* ) => {{
-        let value = unsafe { $fun($($x,)*) };
+    ( $x:expr ) => {{
+        let value = unsafe { $x };
         if value == -1 {
             return Err(Error::last_os_error());
         }
@@ -80,7 +80,7 @@ pub fn ntohl(netlong: u32) -> u32 {
 pub fn socketpair(domain: i32, type_: i32, protocol: i32) -> Result<(Socket, Socket)> {
     unsafe {
         let mut fds: [c_int; 2] = mem::zeroed();
-        _try!(c_socketpair, domain as c_int, type_ as c_int, protocol as c_int, &mut fds as *mut [c_int]);
+        _try!(c_socketpair(domain as c_int, type_ as c_int, protocol as c_int, &mut fds as *mut [c_int]));
         Ok((Socket { fd: fds[0] }, Socket { fd: fds[1] }))
     }
 }
@@ -116,7 +116,7 @@ fn tosocketaddrs_to_sockaddr<T: ToSocketAddrs + ?Sized>(address: &T) -> Result<s
 
 impl Socket {
     pub fn new(socket_family: i32, socket_type: i32, protocol: i32) -> Result<Socket> {
-        let fd = _try!(socket, socket_family, socket_type, protocol);
+        let fd = _try!(socket(socket_family, socket_type, protocol));
         Ok(Socket { fd: fd })
     }
 
@@ -128,9 +128,8 @@ impl Socket {
     pub fn setsockopt<T>(&self, level: i32, name: i32, value: T) -> Result<()> {
         unsafe {
             let value = &value as *const T as *const c_void;
-            _try!(
-                setsockopt,
-                self.fd, level, name, value, mem::size_of::<T>() as socklen_t);
+            _try!(setsockopt(
+                    self.fd, level, name, value, mem::size_of::<T>() as socklen_t));
         }
         Ok(())
     }
@@ -138,15 +137,15 @@ impl Socket {
     /// Binds socket to an address
     pub fn bind<T: ToSocketAddrs + ?Sized>(&self, address: &T) -> Result<()> {
         let sa = try!(tosocketaddrs_to_sockaddr(address));
-        _try!(bind, self.fd, &sa, num::cast(mem::size_of::<sockaddr>()).unwrap());
+        _try!(bind(self.fd, &sa, num::cast(mem::size_of::<sockaddr>()).unwrap()));
         Ok(())
     }
 
     pub fn getsockname(&self) -> Result<SocketAddr> {
         let mut sa: sockaddr = unsafe { mem::zeroed() };
         let mut len: socklen_t = mem::size_of::<sockaddr>() as socklen_t;
-        _try!(getsockname, self.fd,
-              &mut sa as *mut sockaddr, &mut len as *mut socklen_t);
+        _try!(getsockname(self.fd,
+              &mut sa as *mut sockaddr, &mut len as *mut socklen_t));
         assert_eq!(len, mem::size_of::<sockaddr>() as socklen_t);
 
         Ok(sockaddr_to_socketaddr(&sa))
@@ -156,16 +155,16 @@ impl Socket {
             -> Result<usize> {
         let sa = try!(tosocketaddrs_to_sockaddr(address));
         let sent = _try!(
-            sendto, self.fd, buffer.as_ptr() as *const c_void,
+            sendto(self.fd, buffer.as_ptr() as *const c_void,
             buffer.len() as size_t, flags, &sa as *const sockaddr,
-            num::cast(mem::size_of::<sockaddr>()).unwrap());
+            num::cast(mem::size_of::<sockaddr>()).unwrap()));
         Ok(sent as usize)
     }
 
     pub fn send(&self, buffer: &[u8], flags: i32)
             -> Result<usize> {
         let sent = _try!(
-            send, self.fd, buffer.as_ptr() as *const c_void, buffer.len() as size_t, flags);
+            send(self.fd, buffer.as_ptr() as *const c_void, buffer.len() as size_t, flags));
         Ok(sent as usize)
     }
 
@@ -188,8 +187,8 @@ impl Socket {
         let mut sa: sockaddr = unsafe { mem::zeroed() };
         let mut sa_len: socklen_t = mem::size_of::<sockaddr>() as socklen_t;
         let received = _try!(
-            recvfrom, self.fd, buffer.as_ptr() as *mut c_void, buffer.len() as size_t, flags,
-            &mut sa as *mut sockaddr, &mut sa_len as *mut socklen_t);
+            recvfrom(self.fd, buffer.as_ptr() as *mut c_void, buffer.len() as size_t, flags,
+            &mut sa as *mut sockaddr, &mut sa_len as *mut socklen_t));
         assert_eq!(sa_len, mem::size_of::<sockaddr>() as socklen_t);
         Ok((sockaddr_to_socketaddr(&sa), received as usize))
     }
@@ -210,18 +209,18 @@ impl Socket {
     /// Similar to `recv` but receives to predefined buffer and returns the number
     /// of bytes read.
     pub fn recv_into(&self, buffer: &mut [u8], flags: i32) -> Result<usize> {
-        let received = _try!(recv, self.fd, buffer.as_ptr() as *mut c_void, buffer.len() as size_t, flags);
+        let received = _try!(recv(self.fd, buffer.as_ptr() as *mut c_void, buffer.len() as size_t, flags));
         Ok(received as usize)
     }
 
     pub fn connect<T: ToSocketAddrs + ?Sized>(&self, toaddress: &T) -> Result<()> {
         let address = try!(tosocketaddrs_to_sockaddr(toaddress));
-        _try!(connect, self.fd, &address as *const sockaddr, num::cast(mem::size_of::<sockaddr>()).unwrap());
+        _try!(connect(self.fd, &address as *const sockaddr, num::cast(mem::size_of::<sockaddr>()).unwrap()));
         Ok(())
     }
 
     pub fn listen(&self, backlog: i32) -> Result<()> {
-        _try!(listen, self.fd, backlog);
+        _try!(listen(self.fd, backlog));
         Ok(())
     }
 
@@ -230,18 +229,18 @@ impl Socket {
         let mut sa_len: socklen_t = mem::size_of::<sockaddr>() as socklen_t;
 
         let fd = _try!(
-            accept, self.fd, &mut sa as *mut sockaddr, &mut sa_len as *mut socklen_t);
+            accept(self.fd, &mut sa as *mut sockaddr, &mut sa_len as *mut socklen_t));
         assert_eq!(sa_len, mem::size_of::<sockaddr>() as socklen_t);
         Ok((Socket { fd: fd }, sockaddr_to_socketaddr(&sa)))
     }
 
     pub fn close(&self) -> Result<()> {
-        _try!(close, self.fd);
+        _try!(close(self.fd));
         Ok(())
     }
 
     pub fn shutdown(&self, how: i32) -> Result<()> {
-        _try!(shutdown, self.fd, how);
+        _try!(shutdown(self.fd, how));
         Ok(())
     }
 }
