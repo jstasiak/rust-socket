@@ -1,7 +1,6 @@
 #![allow(trivial_casts)]
 
 extern crate libc;
-extern crate num;
 
 pub use libc::{
     AF_INET, AF_INET6, SOCK_STREAM, SOCK_DGRAM, SOCK_RAW,
@@ -49,6 +48,12 @@ extern {
     fn c_socketpair(domain: c_int, type_: c_int, protocol: c_int, sv: *mut [c_int]) -> c_int;
 }
 
+fn sockaddr_len() -> socklen_t {
+    let struct_size = mem::size_of::<sockaddr>();
+    let v = struct_size as socklen_t;
+    assert_eq!(v as usize, struct_size);
+    v
+}
 
 /// Converts a value from host byte order to network byte order.
 #[inline]
@@ -130,7 +135,7 @@ impl Socket {
             let value = &value as *const T as *const c_void;
             _try!(
                 setsockopt,
-                self.fd, level, name, value, mem::size_of::<T>() as socklen_t);
+                self.fd, level, name, value, sockaddr_len());
         }
         Ok(())
     }
@@ -138,16 +143,17 @@ impl Socket {
     /// Binds socket to an address
     pub fn bind<T: ToSocketAddrs + ?Sized>(&self, address: &T) -> Result<()> {
         let sa = try!(tosocketaddrs_to_sockaddr(address));
-        _try!(bind, self.fd, &sa, num::cast(mem::size_of::<sockaddr>()).unwrap());
+        _try!(bind, self.fd, &sa, sockaddr_len());
         Ok(())
     }
 
     pub fn getsockname(&self) -> Result<SocketAddr> {
         let mut sa: sockaddr = unsafe { mem::zeroed() };
-        let mut len: socklen_t = mem::size_of::<sockaddr>() as socklen_t;
+        let sockaddr_len = sockaddr_len();
+        let mut len: socklen_t = sockaddr_len;
         _try!(getsockname, self.fd,
               &mut sa as *mut sockaddr, &mut len as *mut socklen_t);
-        assert_eq!(len, mem::size_of::<sockaddr>() as socklen_t);
+        assert_eq!(len, sockaddr_len);
 
         Ok(sockaddr_to_socketaddr(&sa))
     }
@@ -158,7 +164,7 @@ impl Socket {
         let sent = _try!(
             sendto, self.fd, buffer.as_ptr() as *const c_void,
             buffer.len() as size_t, flags, &sa as *const sockaddr,
-            num::cast(mem::size_of::<sockaddr>()).unwrap());
+            sockaddr_len());
         Ok(sent as usize)
     }
 
@@ -186,11 +192,12 @@ impl Socket {
     /// of bytes read.
     pub fn recvfrom_into(&self, buffer: &mut [u8], flags: i32) -> Result<(SocketAddr, usize)> {
         let mut sa: sockaddr = unsafe { mem::zeroed() };
-        let mut sa_len: socklen_t = mem::size_of::<sockaddr>() as socklen_t;
+        let sockaddr_len = sockaddr_len();
+        let mut sa_len: socklen_t = sockaddr_len;
         let received = _try!(
             recvfrom, self.fd, buffer.as_ptr() as *mut c_void, buffer.len() as size_t, flags,
             &mut sa as *mut sockaddr, &mut sa_len as *mut socklen_t);
-        assert_eq!(sa_len, mem::size_of::<sockaddr>() as socklen_t);
+        assert_eq!(sa_len, sockaddr_len);
         Ok((sockaddr_to_socketaddr(&sa), received as usize))
     }
 
@@ -216,7 +223,7 @@ impl Socket {
 
     pub fn connect<T: ToSocketAddrs + ?Sized>(&self, toaddress: &T) -> Result<()> {
         let address = try!(tosocketaddrs_to_sockaddr(toaddress));
-        _try!(connect, self.fd, &address as *const sockaddr, num::cast(mem::size_of::<sockaddr>()).unwrap());
+        _try!(connect, self.fd, &address as *const sockaddr, sockaddr_len());
         Ok(())
     }
 
@@ -227,11 +234,12 @@ impl Socket {
 
     pub fn accept(&self) -> Result<(Socket, SocketAddr)> {
         let mut sa: sockaddr = unsafe { mem::zeroed() };
-        let mut sa_len: socklen_t = mem::size_of::<sockaddr>() as socklen_t;
+        let sockaddr_len = sockaddr_len();
+        let mut sa_len: socklen_t = sockaddr_len;
 
         let fd = _try!(
             accept, self.fd, &mut sa as *mut sockaddr, &mut sa_len as *mut socklen_t);
-        assert_eq!(sa_len, mem::size_of::<sockaddr>() as socklen_t);
+        assert_eq!(sa_len, sockaddr_len);
         Ok((Socket { fd: fd }, sockaddr_to_socketaddr(&sa)))
     }
 
@@ -255,11 +263,12 @@ impl Drop for Socket {
 
 
 fn socketaddr_to_sockaddr(addr: &SocketAddr) -> sockaddr {
+    assert_eq!(AF_INET as u16 as i32, AF_INET);
     unsafe {
         match *addr {
             SocketAddr::V4(v4) => {
                 let mut sa: sockaddr_in = mem::zeroed();
-                sa.sin_family = num::cast(AF_INET).unwrap();
+                sa.sin_family = AF_INET as u16;
                 sa.sin_port = htons(v4.port());
                 sa.sin_addr = *(&v4.ip().octets() as *const u8 as *const in_addr);
                 *(&sa as *const sockaddr_in as *const sockaddr)

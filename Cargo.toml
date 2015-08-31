@@ -20,4 +20,3 @@ path = "src/lib.rs"
 [dependencies]
 
 libc = "*"
-num = "*"
