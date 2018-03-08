@@ -1,3 +1,5 @@
+# This was an experiment. It's useless. It's abandoned
+
 socket
 ======
 
